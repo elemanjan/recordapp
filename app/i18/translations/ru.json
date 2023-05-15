@@ -1,0 +1,17 @@
+{
+  "username": "Имя пользователя",
+  "password": "Пароль",
+  "login": "Вход",
+  "welcome": "Добро пожаловать",
+  "change_language": "Изменить язык",
+  "nav_record": "Перейти на запись",
+  "input_count_seconds": "Введите количества секунд для записи",
+  "start_record": "Начать запись",
+  "stop_record": "Остановить запись",
+  "voice": "Звук",
+  "video": "Видео",
+  "navigation": {
+    "main_screen": "Главная страница",
+    "record_screen": "Запись"
+  }
+}
