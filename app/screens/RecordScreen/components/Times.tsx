@@ -10,7 +10,7 @@ import {
 
 interface TimerProps {
   isTimerRun: boolean
-  setTimerRun: (bool: boolean) => void
+  callbackStop: () => void
   duration: number | null
   containerStyles?: StyleProp<ViewStyle>
   titleStyles?: StyleProp<TextStyle>
@@ -24,7 +24,7 @@ export const Timer = (props: TimerProps) => {
       interval = setInterval(() => {
         setTimer((prevTime: number) => {
           if (prevTime <= 0) {
-            props.setTimerRun(false)
+            props.callbackStop()
             clearInterval(interval)
             return 0
           }

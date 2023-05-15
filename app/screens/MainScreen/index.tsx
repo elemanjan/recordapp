@@ -1,4 +1,4 @@
-import React, {ReactElement} from 'react'
+import React from 'react'
 import {SafeAreaView} from 'react-native-safe-area-context'
 import {StyleSheet, TextInput, View} from 'react-native'
 import {useTranslation} from 'react-i18next'
@@ -14,7 +14,7 @@ const enIcon = require('@/assets/icons/en.png')
 const ruIcon = require('@/assets/icons/ru.png')
 
 export const MainScreen = observer(
-  (props: AppStackScreenProps<'MainScreen'>): ReactElement => {
+  (props: AppStackScreenProps<'MainScreen'>): JSX.Element => {
     const {t} = useTranslation()
     const {appStore} = useMst()
 

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {useRef, useState} from 'react'
 import {SafeAreaView} from 'react-native-safe-area-context'
 import {StyleSheet, View} from 'react-native'
 import {Colors} from '@/theme/variables'
@@ -10,8 +10,8 @@ import {observer} from 'mobx-react-lite'
 import {useMst} from '@/store/RootStore'
 import {Timer} from './components/Times'
 import {Camera, useCameraDevices} from 'react-native-vision-camera'
-const RNFS = require('react-native-fs')
 
+const RNFS = require('react-native-fs')
 const audioRecorderPlayer = new AudioRecorderPlayer()
 
 const convertToBase64 = async (path: string): Promise<string> => {
@@ -28,27 +28,63 @@ export const RecordScreen = observer((): JSX.Element => {
   const {t} = useTranslation()
   const devices = useCameraDevices()
   const device = devices.back
+  const camera = useRef<Camera>(null)
 
-  const onStartVoiceRecord = async () => {
+  const setRecordTypeVideo = (): void => {
+    setRecordType('video')
+  }
+
+  const setRecordTypeVoice = (): void => {
+    setRecordType('voice')
+  }
+
+  const onStartRecordVoice = async () => {
     await audioRecorderPlayer.startRecorder()
     setStarted(true)
     audioRecorderPlayer.addRecordBackListener(e => {})
   }
 
-  const onStopRecord = async () => {
+  const onStopRecordVoice = async () => {
     try {
       if (isStarted) {
         const result = await audioRecorderPlayer.stopRecorder()
         setStarted(false)
         audioRecorderPlayer.removeRecordBackListener()
-        await convertToBase64(result)
+        const base64 = await convertToBase64(result)
+        await handleSendRecordToAPI(base64)
       }
     } catch (e) {}
   }
 
-  const sendRecord = async (base64: string) => {
+  const onStartRecordVideo = async () => {
     try {
-      await fetch('http://localhost:8080/api/record/video', {
+      camera.current?.startRecording({
+        onRecordingFinished: async video => {
+          const base64 = await convertToBase64(video.path)
+          await handleSendRecordToAPI(base64)
+        },
+        onRecordingError: error => console.error(error),
+      })
+      setStarted(true)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const onStopRecordVideo = async (): Promise<void> => {
+    try {
+      await camera.current?.stopRecording()
+      setStarted(false)
+      // const base64 = await convertToBase64(result)
+      // await handleSendRecordToAPI(base64)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleSendRecordToAPI = async (base64: string): Promise<void> => {
+    try {
+      await fetch(`http://localhost:8080/api/record/${recordType}`, {
         method: 'POST',
         body: base64,
       })
@@ -57,29 +93,18 @@ export const RecordScreen = observer((): JSX.Element => {
     }
   }
 
-  const setRecordTypeVideo = () => {
-    setRecordType('video')
-  }
-
-  const setRecordTypeVoice = () => {
-    setRecordType('voice')
-  }
-
-  const handleRecord = async () => {
+  const handleRecord = async (): Promise<void> => {
     try {
       const cameraPermission = await Camera.getCameraPermissionStatus()
       const microphonePermission = await Camera.getMicrophonePermissionStatus()
-      if (microphonePermission === 'denied') {
+      if (microphonePermission === 'denied' || cameraPermission === 'denied') {
         await Camera.requestMicrophonePermission()
+        await Camera.requestCameraPermission()
       } else {
         if (recordType === 'voice') {
-          await onStartVoiceRecord()
+          onStartRecordVoice()
         } else {
-          if (cameraPermission === 'denied') {
-            await Camera.requestCameraPermission()
-          } else {
-            setActiveCamera(true)
-          }
+          setActiveCamera(true)
         }
       }
     } catch (e) {}
@@ -87,8 +112,9 @@ export const RecordScreen = observer((): JSX.Element => {
 
   if (device != null && isActiveCamera) {
     return (
-      <View style={{flex: 1}}>
+      <View style={styles.cameraViewContainer}>
         <Camera
+          ref={camera}
           video={true}
           style={StyleSheet.absoluteFill}
           device={device}
@@ -96,23 +122,18 @@ export const RecordScreen = observer((): JSX.Element => {
         />
         <Timer
           titleStyles={{fontSize: 36}}
-          containerStyles={{
-            position: 'absolute',
-            top: 0,
-            alignSelf: 'center',
-          }}
+          containerStyles={styles.videoTimerContainer}
           duration={appStore.recordTimer}
           isTimerRun={isStarted}
-          setTimerRun={setStarted}
+          callbackStop={onStopRecordVideo}
         />
         <Button
-          containerStyles={{
-            position: 'absolute',
-            bottom: 40,
-            width: '50%',
-            alignSelf: 'center',
-          }}>
-          Record video
+          onPress={isStarted ? onStopRecordVideo : onStartRecordVideo}
+          containerStyles={[
+            styles.cameraStartRecordBtn,
+            isStarted && styles.cameraStopRecordBtn,
+          ]}>
+          {t(isStarted ? 'stop_record' : 'record_video')}
         </Button>
       </View>
     )
@@ -135,18 +156,22 @@ export const RecordScreen = observer((): JSX.Element => {
             containerStyles={styles.recordTypeBtn}
           />
         </View>
-        <Button onPress={handleRecord} containerStyles={styles.buttonContainer}>
+        <Button
+          isDisabled={isStarted}
+          onPress={handleRecord}
+          containerStyles={styles.buttonContainer}>
           {t('start_record')}
         </Button>
         <Button
-          onPress={onStopRecord}
+          isDisabled={!isStarted}
+          onPress={onStopRecordVoice}
           containerStyles={styles.stopButtonContainer}>
           {t('stop_record')}
         </Button>
         <Timer
           duration={appStore.recordTimer}
           isTimerRun={isStarted}
-          setTimerRun={setStarted}
+          callbackStop={onStopRecordVoice}
         />
       </View>
     </SafeAreaView>
@@ -175,8 +200,28 @@ const styles = StyleSheet.create({
   buttonContainer: {
     marginTop: 20,
   },
+  disabledButtonContainer: {
+    backgroundColor: Colors.grayBg,
+  },
   stopButtonContainer: {
     backgroundColor: Colors.error,
     marginTop: 20,
+  },
+  cameraViewContainer: {
+    flex: 1,
+  },
+  videoTimerContainer: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+  },
+  cameraStartRecordBtn: {
+    position: 'absolute',
+    bottom: 40,
+    width: '50%',
+    alignSelf: 'center',
+  },
+  cameraStopRecordBtn: {
+    backgroundColor: Colors.error,
   },
 })
